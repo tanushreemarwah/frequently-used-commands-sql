@@ -1,0 +1,58 @@
+Putaway Report
+
+\copy (select pi.sku_id, sum(quantity) from putaway_items pi inner join putaways p on pi.putaway_id = p.id where p.vendor_putaway_type not in ('PUTAWAY_SHELF_TRANSFER', 'PUTAWAY_CANCELLED_ITEM') and pi.vendor_inventory_type <> 'QC_REJECTED' group by pi.sku_id) to 'putaway.csv' with csv header;
+
+\copy (select p.vendor_putaway_code, p.vendor_putaway_type, p.unicommerce_creation_at, pi.vendor_inventory_type, pi.sku_id, pi.quantity from putaways p inner join putaway_items pi on p.id = pi.putaway_id where p.vendor_putaway_type in ('PUTAWAY_COURIER_RETURNED_ITEMS', 'PUTAWAY_RECEIVED_RETURNS', 'PUTAWAY_GRN_ITEM') order by pi.sku_id) to 'putaway_data.csv' with csv header;
+
+Sales Order Report
+Remarks:  Inculde only those sku_ids where the satus is ‘delivered’ in processed_orders report.
+
+\copy (select o.id, o.created_at, o.aasm_state, o.user_id, o.source, oi.sku_id, oi.quantity, s.aasm_state, s.actual_dispatch_date, lp.name from orders o inner join order_items oi on o.id = oi.order_id inner join shipments s on o.id = s.order_id inner join logistics_partners lp on s.logistics_partner_id = lp.id  where s.actual_dispatch_date >= '2019-10-01' and s.actual_dispatch_date < '2020-02-20' and o.id not in (1900005348, 1900005011, 1900005106, 1900005107, 1900005347, 1900004669) and o.aasm_state not in ('awaiting_confirmation', 'awaiting_review', 'created', 'cancelled', 'cancellation_in_progress', 'cancellation_requested', 'confirmed') and s.aasm_state not in ('cancelled', 'cancellation_in_progress') and s.warehouse_id = 2 order by o.created_at asc) to 'final_processed_orders.csv' with csv header;
+
+SELECT oi.sku_id, sum(oi.quantity) FROM "orders" inner join order_items oi on orders.id = oi.order_id inner join shipments s on orders.id = s.order_id WHERE (orders.id not in (1900005348, 1900005011, 1900005106, 1900005107, 1900005347, 1900004669) and s.actual_dispatch_date >= '2019-10-01' and s.actual_dispatch_date < '2020-02-20’ and orders.aasm_state not in ('awaiting_confirmation', 'awaiting_review', 'created', 'cancelled', 'cancellation_in_progress', 'cancellation_requested', ‘confirmed’) and s.aasm_state not in ('cancelled', 'cancellation_in_progress’) and s.warehouse_id = 2) GROUP BY oi.sku_id
+
+Group by oi.sku_id:
+
+\copy (select o.id, o.created_at, o.aasm_state, o.user_id, o.source, oi.sku_id, oi.quantity, s.aasm_state, s.actual_dispatch_date, lp.name from orders o inner join order_items oi on o.id = oi.order_id inner join shipments s on o.id = s.order_id inner join logistics_partners lp on s.logistics_partner_id = lp.id  where s.actual_dispatch_date >= '2019-10-01' and s.actual_dispatch_date < '2020-02-20' and o.id not in (1900005348, 1900005011, 1900005106, 1900005107, 1900005347, 1900004669) and o.aasm_state not in ('awaiting_confirmation', 'awaiting_review', 'created', 'cancelled', 'cancellation_in_progress', 'cancellation_requested', 'confirmed') and s.aasm_state not in ('cancelled', 'cancellation_in_progress') and s.warehouse_id = 2 group by oi.sku_id, o.id, o.created_at, o.aasm_state, o.user_id, o.source, s.aasm_state, s.actual_dispatch_date, lp.name, oi.quantity order by o.created_at asc) to 'grouped_orders.csv' with csv header;
+
+
+GAtepass Report:
+
+\copy (select g.uniware_gatepass_code, g.reason, g.for_bad_inventory, gi.sku_id, gi.quantity from gatepasses g inner join gatepass_items gi on g.id = gi.gatepass_id) to 'gatepass.csv' with csv header;
+
+
+
+
+TEST orders: 
+AWB no mentions “test"
+Ignore these when next ‘processed_orders.csv' is generated. 
+1900005348, 1900005011, 1900005106, 1900005107, 1900005347, 1900004669
+
+1900004755, 1900005009 - shipment 184 not in Uniware, contains only surprise
+1900004760 - (colossal Kajal )122247- not delivered
+
+1900005252 - shipment id 338 marked Ito_recieved but no invoice in Uniware exists.
+1900004822 - no invoice for sku_id = 285528 exists in Uniware , but oms shows delivered.
+1900003080 - 285527 exists in oms , but not in Uniware
+190000349 - 285533 not pushed in Uniware, instead, 202229 was pushed
+
+Orders Processed between a date range:
+\copy (select o.id as "Order ID", s.id as "Shipment ID", o.created_at, o.cod, o.source, o.total_amount, s.expected_delivery_date, s.actual_dispatch_date, s.expected_delivery_date, s.actual_delivery_date from orders o inner join order_items oi on o.id = oi.order_id inner join shipments s on o.id = s.order_id  where o.id not in (1900005348, 1900005011, 1900005106, 1900005107, 1900005347, 1900004669) and o.aasm_state not in ('awaiting_confirmation', 'awaiting_review', 'created', 'cancelled', 'cancellation_in_progress', 'cancellation_requested', 'confirmed') and s.aasm_state not in ('cancelled', 'cancellation_in_progress') and o.created_at >= '2020-01-01' and o.created_at <= '2020-01-31' order by o.created_at asc) to 'orders_processed_in_Jan2020.csv' with csv header; 
+
+Remarks: 
+
+1900005488 - don’t consider in order report because surprise in this order has not been dispatched. 
+Sale for some orders coming our to be double the actual value - eg, 5513, 5009 
+Uniware decreases the inventory whenever shipment is CREATED, whereas we have considered the date filter when the shipment is actually dispatched. 
+
+
+SKU_ID with negative inventory in WMS:
+152483, 46, -1
+152628, 46, -1
+156805, 46, -2
+158038, 46, -1
+162789, 46, -4
+177738, 46, -1
+183973, 46, -3
+148860, 46, nil
+150519, 46, -1
